@@ -1,0 +1,30 @@
+{
+  "name": "saga-resource",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint \"./**/*@(.js|.jsx|.ts|.tsx)\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MichaelDuo/saga-resource.git"
+  },
+  "author": "MichaelDuo",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MichaelDuo/saga-resource/issues"
+  },
+  "homepage": "https://github.com/MichaelDuo/saga-resource#readme",
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^1.9.0",
+    "@typescript-eslint/parser": "^1.9.0",
+    "eslint": "^5.16.0",
+    "eslint-config-prettier": "^4.3.0",
+    "eslint-plugin-prettier": "^3.1.0",
+    "prettier": "^1.17.1",
+    "typescript": "^3.5.1"
+  }
+}
