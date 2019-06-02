@@ -1,11 +1,13 @@
 {
-    "compilerOptions": {
-      "target": "es5",
-      "module": "commonjs",
-      "declaration": true,
-      "outDir": "./dist",
-      "strict": true
-    },
-    "include": ["src"],
-    "exclude": ["node_modules", "**/__tests__/*"]
-  }
+	"compilerOptions": {
+		"target": "es5",
+		"allowSyntheticDefaultImports": true,
+		"lib": ["es2017"],
+		"module": "commonjs",
+		"declaration": true,
+		"outDir": "./dist",
+		"strict": true
+	},
+	"include": ["src"],
+	"exclude": ["node_modules", "**/__tests__/*"]
+}
