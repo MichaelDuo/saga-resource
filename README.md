@@ -1,8 +1,8 @@
 saga-resource
 =============
 [![npm][npm-image]][npm-url]
-
-[![npm][npm-classic-image]][npm-url]
+[![Build Status][travis-image]][travis-url]
+[![codecov][codecov-image]][codecov-url]
 
 ## What it is
 saga-resource is a store that works together with redux and redux-saga, with miminal boilerplates, it automatically fetches your remote resources with flexibility for you to assemble your model, and offers CURD methods that could free you from writting trivial actions and reducers.
@@ -24,3 +24,7 @@ TBC
 
 [npm-image]: https://img.shields.io/npm/v/saga-resource.svg?style=flat
 [npm-url]: https://www.npmjs.com/package/saga-resource
+[travis-image]: https://travis-ci.com/MichaelDuo/saga-resource.svg?branch=master
+[travis-url]: https://travis-ci.com/MichaelDuo/saga-resource
+[codecov-image]: https://codecov.io/gh/michaelduo/saga-resource/branch/master/graph/badge.svg
+[codecov-url]: https://codecov.io/gh/MichaelDuo/saga-resource
