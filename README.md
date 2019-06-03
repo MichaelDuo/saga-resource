@@ -1,6 +1,7 @@
 saga-resource
 =============
 [![npm][npm-image]][npm-url]
+
 [![npm][npm-classic-image]][npm-url]
 
 ## What it is
@@ -23,4 +24,3 @@ TBC
 
 [npm-image]: https://img.shields.io/npm/v/saga-resource.svg?style=flat
 [npm-url]: https://www.npmjs.com/package/saga-resource
-[npm-classic-image]: https://nodei.co/npm/saga-resource.png
