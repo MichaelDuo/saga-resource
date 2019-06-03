@@ -1,4 +1,7 @@
-# saga-resource
+saga-resource
+=============
+[![npm][npm-image]][npm-url]
+[![npm][npm-classic-image]][npm-url]
 
 ## What it is
 saga-resource is a store that works together with redux and redux-saga, with miminal boilerplates, it automatically fetches your remote resources with flexibility for you to assemble your model, and offers CURD methods that could free you from writting trivial actions and reducers.
@@ -17,3 +20,7 @@ TBC
 
 ## Integration with your current redux and redux-saga project
 TBC
+
+[npm-image]: https://img.shields.io/npm/v/saga-resource.svg?style=flat
+[npm-url]: https://www.npmjs.com/package/saga-resource
+[npm-classic-image]: https://nodei.co/npm/saga-resource.png
