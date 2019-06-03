@@ -1,12 +1,19 @@
 {
 	"name": "saga-resource",
 	"version": "0.0.1",
-	"description": "",
-	"main": "index.js",
+	"description": "saga-resource",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
 	"scripts": {
 		"build": "tsc",
 		"lint": "eslint \"./**/*@(.js|.jsx|.ts|.tsx)\"",
-		"test": "jest --config jestconfig.json"
+		"test": "jest --config jestconfig.json",
+		"format": "prettier --write \"src/**/*.ts\" \"src/**/*.js\"",
+		"prepare": "npm run build",
+		"prepublishOnly": "npm run lint && npm test",
+		"preversion": "npm run lint",
+		"version": "npm run format && git add -A src",
+		"postversion": "git push && git push --tags"
 	},
 	"repository": {
 		"type": "git",
