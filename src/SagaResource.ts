@@ -108,7 +108,7 @@ export default class SagaResource<T, S = {}> {
 
 	public reducer: Reducer<ResourceState<T>, AnyAction>;
 
-	public saga: any;
+	public combinedSaga: any;
 
 	protected axios?: AxiosInstance;
 
@@ -132,7 +132,7 @@ export default class SagaResource<T, S = {}> {
 			...this.getCustomActions(),
 		};
 		this.reducer = this.getReducer();
-		this.saga = this.getSaga();
+		this.combinedSaga = this.getSaga();
 	}
 
 	private getActionTypes(): BasicActionTypes {
