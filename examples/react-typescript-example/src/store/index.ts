@@ -1,11 +1,22 @@
 import {createStore, combineReducers, applyMiddleware, Store} from 'redux';
 import {composeWithDevTools} from 'redux-devtools-extension';
 import createSagaMiddleware from 'redux-saga';
-import counterReducer from './counter/reducer';
-import rootSaga from '../saga'
+import saga from '../saga'
+import counter from './counter'
+import {combineResources} from 'saga-resource'
+import {all, Effect} from 'redux-saga/effects';
+
+const combinedResources = combineResources({counter})
+	
+const rootSaga = function*(): IterableIterator<Effect>{
+	yield all([
+		saga(),
+		...combinedResources.sagas.map((saga): any => saga()),
+	])
+}
 
 export const rootReducer = combineReducers({
-	counter: counterReducer,
+	...combinedResources.reducers
 });
 
 const bindMiddleware = (...middlewares: any[]): any => {

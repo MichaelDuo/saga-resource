@@ -1,4 +1,16 @@
-import Home from './Home';
+import Home, {StateProps, DispatchProps} from './Home';
 import {connect} from 'react-redux'
+import {AppState} from '../../store'
+import asyncIncrement from '../../saga/asyncIncrement/action'
 
-export default connect()(Home);
+const mapStateToProps = (state: AppState):StateProps => {
+    return {
+        count: state.counter.count
+    }
+}
+
+const mapDispatchToProps = {
+    asyncIncrement
+}
+
+export default connect<StateProps, DispatchProps, null, AppState>(mapStateToProps, mapDispatchToProps)(Home);
