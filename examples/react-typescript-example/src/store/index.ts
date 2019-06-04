@@ -7,6 +7,10 @@ import {combineResources} from 'saga-resource'
 import {all, Effect} from 'redux-saga/effects';
 
 const combinedResources = combineResources({counter})
+
+export const rootReducer = combineReducers({
+	...combinedResources.reducers
+});
 	
 const rootSaga = function*(): IterableIterator<Effect>{
 	yield all([
@@ -14,10 +18,6 @@ const rootSaga = function*(): IterableIterator<Effect>{
 		...combinedResources.sagas.map((saga): any => saga()),
 	])
 }
-
-export const rootReducer = combineReducers({
-	...combinedResources.reducers
-});
 
 const bindMiddleware = (...middlewares: any[]): any => {
 	if (process.env.NODE_ENV !== 'production') {
