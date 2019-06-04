@@ -1,0 +1,7 @@
+{
+	"verboase": true,
+	"ignore": ["node_modules", "dist"],
+	"watch": ["src"],
+	"ext": "ts,js",
+	"exec": "npm run build"
+}

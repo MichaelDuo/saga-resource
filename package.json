@@ -6,6 +6,7 @@
 	"types": "dist/index.d.ts",
 	"scripts": {
 		"build": "tsc",
+		"dev": "nodemon",
 		"lint": "eslint \"./**/*@(.js|.jsx|.ts|.tsx)\"",
 		"test": "jest --config jestconfig.json",
 		"format": "prettier --write \"src/**/*.ts\" \"src/**/*.js\"",
@@ -35,6 +36,7 @@
 		"eslint-config-prettier": "^4.3.0",
 		"eslint-plugin-prettier": "^3.1.0",
 		"jest": "24.7.1",
+		"nodemon": "^1.19.1",
 		"prettier": "^1.17.1",
 		"ts-jest": "^24.0.2",
 		"typescript": "^3.3.4000"
