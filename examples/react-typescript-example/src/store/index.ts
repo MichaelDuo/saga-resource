@@ -1,23 +1,17 @@
-import {createStore, combineReducers, applyMiddleware, Store} from 'redux';
+import {createStore, applyMiddleware, Store} from 'redux';
 import {composeWithDevTools} from 'redux-devtools-extension';
 import createSagaMiddleware from 'redux-saga';
-import saga from '../saga'
-import counter from './counter'
-import {combineResources} from 'saga-resource'
-import {all, Effect} from 'redux-saga/effects';
+import saga from '../saga';
+import counter from './counter';
+import {combineResources} from 'saga-resource';
 
-const combinedResources = combineResources({counter})
+const combinedResources = combineResources({counter});
 
-export const rootReducer = combineReducers({
-	...combinedResources.reducers
-});
-	
-const rootSaga = function*(): IterableIterator<Effect>{
-	yield all([
-		saga(),
-		...combinedResources.sagas.map((saga): any => saga()),
-	])
-}
+const rootReducer = combinedResources.getReducer();
+
+export type AppState = ReturnType<typeof rootReducer>;
+
+const rootSaga = combinedResources.getSaga(saga);
 
 const bindMiddleware = (...middlewares: any[]): any => {
 	if (process.env.NODE_ENV !== 'production') {
@@ -25,8 +19,6 @@ const bindMiddleware = (...middlewares: any[]): any => {
 	}
 	return applyMiddleware(...middlewares);
 };
-
-export type AppState = ReturnType<typeof rootReducer>;
 
 export default function makeStore(initialState?: AppState): Store {
 	const sagaMiddleware = createSagaMiddleware();
@@ -37,7 +29,7 @@ export default function makeStore(initialState?: AppState): Store {
 		bindMiddleware(sagaMiddleware)
 	);
 
-	sagaMiddleware.run(rootSaga)
+	sagaMiddleware.run(rootSaga);
 
 	return store;
 }
