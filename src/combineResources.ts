@@ -1,5 +1,6 @@
 import {Reducer, Action, combineReducers} from 'redux';
-import SagaResource, {ResourceState} from './SagaResource';
+import {ResourceState} from './types';
+import SagaResource from './SagaResource';
 import {mapValues, values} from 'lodash';
 import {all, Effect} from 'redux-saga/effects';
 

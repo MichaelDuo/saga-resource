@@ -1,6 +1,6 @@
 import axios from 'axios';
 import {makeResource, SagaResource} from '../index';
-import {ResourceState} from '../SagaResource';
+import {ResourceState} from '../types';
 
 function makeResourceState<T>(state: T): ResourceState<T> {
 	return Object.assign(state, {
