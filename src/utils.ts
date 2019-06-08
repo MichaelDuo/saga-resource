@@ -19,3 +19,8 @@ export function wrapEffect(
 		yield effect(action.payload, action.options);
 	};
 }
+
+export const makeActionTypeGenerator = (
+	resourceName: string
+): ((actionName: string) => string) => (actionName: string): string =>
+	`${resourceName}_${actionName}`;
