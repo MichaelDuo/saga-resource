@@ -1,8 +1,9 @@
 import {Reducer, AnyAction} from 'redux';
-import {AxiosInstance, AxiosError} from 'axios';
-import _ from 'lodash';
+import axios, {AxiosInstance, AxiosError} from 'axios';
+import _ from 'lodash'; // import single function
 import pathToRexexp from 'path-to-regexp';
 import {takeEvery, put, takeLeading, Effect} from 'redux-saga/effects';
+import {separateBaseURLAndPath, wrapEffect} from './utils';
 
 import {
 	ResourceError,
@@ -37,12 +38,13 @@ export default class SagaResource<S, R = {}, E = {}> {
 
 	public reducers: any;
 
-	// public effects:
+	public effects: any;
 
 	public combinedSaga: any;
 
-	protected axios?: AxiosInstance;
+	protected axios: AxiosInstance = axios;
 
+	protected baseURL?: string;
 	protected path?: string;
 
 	protected toPathString?: pathToRexexp.PathFunction<object>;
@@ -50,11 +52,14 @@ export default class SagaResource<S, R = {}, E = {}> {
 	public constructor(resourceDef: ResourceDefinition<S, R, E>) {
 		this.name = resourceDef.name;
 		this.resourceDef = resourceDef;
-		this.axios = resourceDef.axios;
-		this.path = resourceDef.path;
+		this.axios = resourceDef.axios || this.axios;
 		this.reducers = resourceDef.reducers;
-		if (this.path) {
-			this.toPathString = pathToRexexp.compile(this.path);
+		this.effects = this.getEffects();
+		if (resourceDef.path) {
+			const {path, baseURL} = separateBaseURLAndPath(resourceDef.path);
+			this.baseURL = baseURL;
+			this.path = path;
+			this.toPathString = pathToRexexp.compile(path);
 		}
 
 		this.basicActionTypes = this.getActionTypes();
@@ -95,33 +100,33 @@ export default class SagaResource<S, R = {}, E = {}> {
 			}),
 			createRequest: (
 				data: any,
-				options?: RemoteActionOptions
+				options: RemoteActionOptions = {}
 			): ResourceRemoteAction => ({
 				type: this.basicActionTypes.createRequest,
 				payload: data,
-				...options,
+				options,
 			}),
 			updateRequest: (
 				data: any,
-				options?: RemoteActionOptions
+				options: RemoteActionOptions = {}
 			): ResourceRemoteAction => ({
 				type: this.basicActionTypes.updateRequest,
 				payload: data,
-				...options,
+				options,
 			}),
 			fetchRequest: (
-				options?: RemoteActionOptions
+				options: RemoteActionOptions = {}
 			): ResourceRemoteAction => ({
 				type: this.basicActionTypes.fetchRequest,
-				...options,
+				options,
 			}),
 			deleteRequest: (
 				data?: any,
-				options?: RemoteActionOptions
+				options: RemoteActionOptions = {}
 			): ResourceRemoteAction => ({
 				type: this.basicActionTypes.deleteRequest,
 				payload: data,
-				...options,
+				options,
 			}),
 		};
 	}
@@ -264,30 +269,32 @@ export default class SagaResource<S, R = {}, E = {}> {
 			 * Create will not set resource, you should process it from callback or refetch again
 			 *  */
 			createRequest: function*(
-				action: ResourceRemoteAction
+				payload: any,
+				options: RemoteActionOptions
 			): Iterable<any> {
 				yield self.actions.clearError();
 				if (!self.path || !self.axios || !self.toPathString) {
 					throw new Error('Can not find path or axios');
 				}
-				const path = self.toPathString(action.params);
+				const path = self.toPathString(options.params);
 
 				let error: any = null;
-				let data: any = null;
+				let response: any = null;
 				try {
 					yield put(self.actions.startLoading());
-					data = yield self.axios({
+					response = yield self.axios({
 						method: 'post',
+						baseURL: self.baseURL,
 						url: path,
-						params: action.query,
-						data: action.payload,
+						params: options.query,
+						data: payload,
 					});
 				} catch (e) {
 					error = e;
 					yield self.handleError(e);
 				} finally {
 					yield put(self.actions.endLoading());
-					action.done && action.done(error, data);
+					options.done && options.done(error, response.data);
 				}
 			},
 
@@ -295,56 +302,60 @@ export default class SagaResource<S, R = {}, E = {}> {
 			 * Update will not set resource, you should process it from callback or refetch again
 			 *  */
 			updateRequest: function*(
-				action: ResourceRemoteAction
+				payload: any,
+				options: RemoteActionOptions
 			): Iterable<any> {
 				yield self.actions.clearError();
 				if (!self.path || !self.axios || !self.toPathString) {
 					throw new Error('Can not find path or axios');
 				}
-				const path = self.toPathString(action.params);
+				const path = self.toPathString(options.params);
 
 				let error: any = null;
-				let data: any = null;
+				let response: any = null;
 				try {
-					data = yield self.axios({
+					response = yield self.axios({
 						method: 'patch',
+						baseURL: self.baseURL,
 						url: path,
-						params: action.query,
-						data: action.payload,
+						params: options.query,
+						data: payload,
 					});
 				} catch (e) {
 					error = e;
 					yield self.handleError(e);
 				} finally {
-					action.done && action.done(error, data);
+					options.done && options.done(error, response.data);
 				}
 			},
 
 			fetchRequest: function*(
-				action: ResourceRemoteAction
+				_: any,
+				options: RemoteActionOptions
 			): Iterable<any> {
 				yield self.actions.clearError();
 				if (!self.path || !self.axios || !self.toPathString) {
 					throw new Error('Can not find path or axios');
 				}
-				const path = self.toPathString(action.params);
+				const path = self.toPathString(options.params);
 
 				let error: any = null;
-				let data: any = null;
+				let response: any = null;
 				try {
 					yield put(self.actions.startLoading());
-					data = yield self.axios({
+					response = yield self.axios({
+						baseURL: self.baseURL,
 						method: 'get',
 						url: path,
-						params: action.query,
+						params: options.query,
 					});
-					yield put(self.actions.set(data));
+					yield put(self.actions.set(response.data));
 				} catch (e) {
 					error = e;
 					yield self.handleError(e);
 				} finally {
 					yield put(self.actions.endLoading());
-					action.done && action.done(error, data);
+					options.done && options.done(error, response.data);
 				}
 			},
 
@@ -352,55 +363,47 @@ export default class SagaResource<S, R = {}, E = {}> {
 			 * Delete will not set resource, you should process it from callback or refetch again
 			 *  */
 			deleteRequest: function*(
-				action: ResourceRemoteAction
+				payload: any,
+				options: RemoteActionOptions
 			): Iterable<any> {
 				yield self.actions.clearError();
 				if (!self.path || !self.axios || !self.toPathString) {
 					throw new Error('Can not find path or axios');
 				}
-				const path = self.toPathString(action.params);
+				const path = self.toPathString(options.params);
 
 				let error: any = null;
-				let data: any = null;
+				let response: any = null;
 				try {
 					yield put(self.actions.startLoading());
-					data = yield self.axios({
+					response = yield self.axios({
 						method: 'delete',
+						baseURL: self.baseURL,
 						url: path,
-						params: action.query,
-						data: action.payload,
+						params: options.query,
+						data: payload,
 					});
 				} catch (e) {
 					error = e;
 					yield self.handleError(e);
 				} finally {
 					yield put(self.actions.endLoading());
-					action.done && action.done(error, data);
+					options.done && options.done(error, response.data);
 				}
 			},
+			...self.resourceDef.effects,
 		};
 	}
 
 	private getSaga(): any {
-		const {
-			createRequest,
-			updateRequest,
-			fetchRequest,
-			deleteRequest,
-		} = this.getEffects();
-
 		const self = this;
 		return function*(): Iterable<Effect> {
-			yield takeEvery(self.basicActionTypes.createRequest, createRequest);
-			yield takeEvery(self.basicActionTypes.updateRequest, updateRequest);
-			yield takeLeading(self.basicActionTypes.fetchRequest, fetchRequest);
-			yield takeEvery(self.basicActionTypes.deleteRequest, deleteRequest);
-			if (self.resourceDef.effects) {
-				const {effects} = self.resourceDef;
-				const keys = Object.keys(effects);
-				for (const key of keys) {
-					yield takeEvery(key, (effects as any)[key]);
-				}
+			const keys = Object.keys(self.effects);
+			for (const key of keys) {
+				yield takeEvery(
+					self.basicActionTypes[key] || key,
+					wrapEffect((self.effects as any)[key])
+				);
 			}
 		};
 	}

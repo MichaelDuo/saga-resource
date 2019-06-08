@@ -1,6 +1,5 @@
 import {Reducer, AnyAction} from 'redux';
 import {AxiosInstance} from 'axios';
-import _ from 'lodash';
 
 export interface ResourceError {
 	status: number;
@@ -25,6 +24,7 @@ export interface RemoteActionOptions {
 export interface ResourceAction {
 	type: string;
 	payload?: any;
+	options?: any;
 }
 
 export interface ResourceUpdateAction extends ResourceAction {
@@ -33,9 +33,7 @@ export interface ResourceUpdateAction extends ResourceAction {
 }
 
 export interface ResourceRemoteAction extends ResourceAction {
-	query?: any;
-	params?: any;
-	done?: (error?: any, data?: any) => void;
+	options: RemoteActionOptions;
 }
 
 export type Effects<T> = {[K in keyof T]: (action: AnyAction) => any};
@@ -96,6 +94,7 @@ export interface BasicActionTypes {
 	updateRequest: string;
 	fetchRequest: string;
 	deleteRequest: string;
+	[key: string]: string;
 }
 
 export interface ObjectWithType<T> {
