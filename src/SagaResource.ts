@@ -2,8 +2,12 @@ import {Reducer, AnyAction} from 'redux';
 import axios, {AxiosInstance, AxiosError} from 'axios';
 import _ from 'lodash'; // import single function
 import pathToRexexp from 'path-to-regexp';
-import {takeEvery, put, takeLeading, Effect} from 'redux-saga/effects';
-import {separateBaseURLAndPath, wrapEffect} from './utils';
+import {takeEvery, put, Effect} from 'redux-saga/effects';
+import {
+	separateBaseURLAndPath,
+	wrapEffect,
+	makeActionTypeGenerator,
+} from './utils';
 
 import {
 	ResourceError,
@@ -11,49 +15,64 @@ import {
 	ResourceState,
 	RemoteActionOptions,
 	ResourceAction,
-	ResourceUpdateAction,
-	ResourceRemoteAction,
 	ResourceDefinition,
 	BasicActions,
+	BasicEffects,
+	CustomEffects,
 	ExtendedActions,
 	BasicActionTypes,
-	ObjectWithType,
-	CustomActions,
-	ReducerActions,
+	BasicRemoteActions,
+	CustomReducerActions,
+	CustomEffectActions,
+	DefaultReducers,
+	DefaultEffects,
 } from './types';
 
-export default class SagaResource<S, R = {}, E = {}> {
-	private resourceDef: ResourceDefinition<S, R, E>;
-
+export default class SagaResource<
+	S,
+	R extends DefaultReducers<S, R>,
+	E extends DefaultEffects<E>
+> {
 	public name: string;
 
-	public basicActionTypes: BasicActionTypes;
-
 	public actions: BasicActions &
+		BasicRemoteActions &
 		ExtendedActions &
-		CustomActions<E> &
-		ReducerActions<R>;
+		CustomReducerActions<R> &
+		CustomEffectActions<E>;
 
-	public reducer: Reducer<ResourceState<S>, AnyAction>;
+	// expose for testing and direct use in saga
+	public effects: BasicEffects & CustomEffects<E>;
 
+	// expose for testing purposes
 	public reducers: any;
 
-	public effects: any;
-
+	// only intended for combine resources, maybe underscore this?
+	// or even from a getter function?
 	public combinedSaga: any;
+	public reducer: Reducer<ResourceState<S>, AnyAction>; // combined reducer maybe?
 
-	protected axios: AxiosInstance = axios;
+	// private properties
+	private basicActionTypes: BasicActionTypes;
+	private basicActions: BasicActions;
 
-	protected baseURL?: string;
-	protected path?: string;
+	private resourceDef: ResourceDefinition<S, R, E>;
 
-	protected toPathString?: pathToRexexp.PathFunction<object>;
+	private axios: AxiosInstance = axios;
+	private baseURL?: string;
+	private path?: string;
+	private toPathString?: pathToRexexp.PathFunction<object>;
+
+	private actionTypeGenerator: (actionName: string) => string;
 
 	public constructor(resourceDef: ResourceDefinition<S, R, E>) {
 		this.name = resourceDef.name;
+		this.actionTypeGenerator = makeActionTypeGenerator(this.name);
+
 		this.resourceDef = resourceDef;
 		this.axios = resourceDef.axios || this.axios;
 		this.reducers = resourceDef.reducers;
+
 		this.effects = this.getEffects();
 		if (resourceDef.path) {
 			const {path, baseURL} = separateBaseURLAndPath(resourceDef.path);
@@ -63,25 +82,24 @@ export default class SagaResource<S, R = {}, E = {}> {
 		}
 
 		this.basicActionTypes = this.getActionTypes();
+		this.basicActions = this.getBasicActions();
 		this.actions = {
-			...this.getBasicActions(),
+			...this.basicActions,
 			...this.getExtendedActions(),
-			...this.getCustomActions(),
+			...this.getEffectAndReducerActions(),
 		};
 		this.reducer = this.getReducer();
 		this.combinedSaga = this.getSaga();
 	}
 
 	private getActionTypes(): BasicActionTypes {
-		return {
-			set: `SET_${this.resourceDef.name}`,
-			update: `UPDATE_${this.resourceDef.name}`,
-			clear: `CLEAR_${this.resourceDef.name}`,
-			createRequest: `CREATE_REQUEST_${this.resourceDef.name}`,
-			updateRequest: `UPDATE_REQUEST_${this.resourceDef.name}`,
-			fetchRequest: `FETCH_REQUEST_${this.resourceDef.name}`,
-			deleteRequest: `DELETE_REQUEST_${this.resourceDef.name}`,
-		};
+		return _.transform(
+			['set', 'update', 'clear'],
+			(result, type): any => {
+				result[type] = this.actionTypeGenerator(type);
+			},
+			{} as any
+		);
 	}
 
 	private getBasicActions(): BasicActions {
@@ -90,127 +108,70 @@ export default class SagaResource<S, R = {}, E = {}> {
 				type: this.basicActionTypes.set,
 				payload: data,
 			}),
-			update: (key: string, value: any): ResourceUpdateAction => ({
+			update: (key: string, value: any): ResourceAction => ({
 				type: this.basicActionTypes.update,
-				key,
 				payload: value,
+				options: {
+					key,
+				},
 			}),
 			clear: (): ResourceAction => ({
 				type: this.basicActionTypes.clear,
-			}),
-			createRequest: (
-				data: any,
-				options: RemoteActionOptions = {}
-			): ResourceRemoteAction => ({
-				type: this.basicActionTypes.createRequest,
-				payload: data,
-				options,
-			}),
-			updateRequest: (
-				data: any,
-				options: RemoteActionOptions = {}
-			): ResourceRemoteAction => ({
-				type: this.basicActionTypes.updateRequest,
-				payload: data,
-				options,
-			}),
-			fetchRequest: (
-				options: RemoteActionOptions = {}
-			): ResourceRemoteAction => ({
-				type: this.basicActionTypes.fetchRequest,
-				options,
-			}),
-			deleteRequest: (
-				data?: any,
-				options: RemoteActionOptions = {}
-			): ResourceRemoteAction => ({
-				type: this.basicActionTypes.deleteRequest,
-				payload: data,
-				options,
 			}),
 		};
 	}
 
 	private getExtendedActions(): ExtendedActions {
 		return {
-			startLoading: (): ResourceUpdateAction => ({
-				type: this.basicActionTypes.update,
-				key: 'meta.loading',
-				payload: true,
-			}),
-			endLoading: (): ResourceUpdateAction => ({
-				type: this.basicActionTypes.update,
-				key: 'meta.loading',
-				payload: false,
-			}),
-			startUpdating: (keys: string[]): ResourceUpdateAction => {
-				const updateKeys: ObjectWithType<boolean> = {};
-				keys.reduce((acc, cur): ObjectWithType<boolean> => {
+			startLoading: (): ResourceAction =>
+				this.basicActions.update('meta.loading', true),
+			endLoading: (): ResourceAction =>
+				this.basicActions.update('meta.loading', false),
+			startUpdating: (keys: string[]): ResourceAction => {
+				const updateKeys: Record<string, boolean> = {};
+				keys.reduce((acc, cur): Record<string, boolean> => {
 					acc[cur] = true;
 					return acc;
 				}, updateKeys);
-
-				return {
-					type: this.basicActionTypes.update,
-					key: `meta.updating`,
-					payload: updateKeys,
-				};
+				return this.basicActions.update('meta.updating', updateKeys);
 			},
-			endUpdating: (keys: string[]): ResourceUpdateAction => {
-				const updateKeys: ObjectWithType<boolean> = {};
-				keys.reduce((acc, cur): ObjectWithType<boolean> => {
+			endUpdating: (keys: string[]): ResourceAction => {
+				const updateKeys: Record<string, boolean> = {};
+				keys.reduce((acc, cur): Record<string, boolean> => {
 					acc[cur] = false;
 					return acc;
 				}, updateKeys);
-
-				return {
-					type: this.basicActionTypes.update,
-					key: `meta.updating`,
-					payload: updateKeys,
-				};
+				return this.basicActions.update('meta.updating', updateKeys);
 			},
-			setError: (error: ResourceError): ResourceUpdateAction => {
-				return {
-					type: this.basicActionTypes.update,
-					key: 'meta.error',
-					payload: error,
-				};
+			setError: (error: ResourceError): ResourceAction => {
+				return this.basicActions.update('meta.error', error);
 			},
-			clearError: (): ResourceUpdateAction => {
-				return {
-					type: this.basicActionTypes.update,
-					key: 'meta.error',
-					payload: null,
-				};
+			clearError: (): ResourceAction => {
+				return this.basicActions.update('meta.error', null);
 			},
 		};
 	}
 
-	private getCustomActions(): ReducerActions<R> & CustomActions<E> {
-		const result = {} as any;
-		if (this.resourceDef.effects) {
-			const {effects} = this.resourceDef;
-			Object.keys(effects).forEach(
-				(type): void => {
-					result[type] = (data: any): ResourceAction => ({
-						type,
-						payload: data,
-					});
-				}
-			);
-		}
-		if (this.resourceDef.reducers) {
-			const {reducers} = this.resourceDef;
-			Object.keys(reducers).forEach(
-				(type): void => {
-					result[type] = (data: any): ResourceAction => ({
-						type,
-						payload: data,
-					});
-				}
-			);
-		}
-		return result;
+	private getEffectAndReducerActions(): BasicRemoteActions &
+		CustomReducerActions<R> &
+		CustomEffectActions<E> {
+		const effects = this.effects || {};
+		const {reducers = {}} = this.resourceDef;
+		const typeArr = _.keys(effects).concat(_.keys(reducers));
+		return typeArr.reduce(
+			(acc, type): any => {
+				acc[type] = (
+					payload: any = {},
+					options: any = {}
+				): ResourceAction => ({
+					type: this.actionTypeGenerator(type),
+					payload,
+					options,
+				});
+				return acc;
+			},
+			{} as any
+		);
 	}
 
 	private getReducer(): Reducer<ResourceState<S>, AnyAction> {
@@ -222,32 +183,40 @@ export default class SagaResource<S, R = {}, E = {}> {
 		const initialState = _.assign({}, this.resourceDef.state, {
 			meta: defaultMeta,
 		});
+		let customReducers = this.reducers;
+		customReducers = _.transform(
+			customReducers as {[key: string]: any},
+			(result, value, key): any => {
+				result[this.actionTypeGenerator(key)] = value;
+			},
+			{} as any
+		);
 		return (
 			state: ResourceState<S> = _.cloneDeep(initialState),
 			action: AnyAction
 		): ResourceState<S> => {
-			if (this.reducers && this.reducers[action.type]) {
-				return this.reducers[action.type](state, action.payload);
+			if (customReducers && customReducers[action.type]) {
+				return customReducers[action.type](action.payload, {state});
 			}
 			switch (action.type) {
 				case this.basicActionTypes.set:
 					return {...state, ...action.payload};
 				case this.basicActionTypes.update: {
 					let newState;
-					const target = _.get(state, action.key);
+					const target = _.get(state, action.options.key);
 					if (
 						target &&
 						_.isPlainObject(target) &&
 						_.isPlainObject(action.payload)
 					) {
-						newState = _.set(state, action.key, {
+						newState = _.set(state, action.options.key, {
 							...target,
 							...action.payload,
 						});
 					} else {
 						newState = _.set(
 							state as any,
-							action.key,
+							action.options.key,
 							action.payload
 						);
 					}
@@ -261,7 +230,7 @@ export default class SagaResource<S, R = {}, E = {}> {
 		};
 	}
 
-	private getEffects(): any {
+	private getEffects(): BasicEffects & CustomEffects<E> {
 		// should not accept an action, should accept payload, get saga should wrap those effects
 		const self = this;
 		return {
@@ -270,13 +239,13 @@ export default class SagaResource<S, R = {}, E = {}> {
 			 *  */
 			createRequest: function*(
 				payload: any,
-				options: RemoteActionOptions
+				options?: RemoteActionOptions
 			): Iterable<any> {
 				yield self.actions.clearError();
 				if (!self.path || !self.axios || !self.toPathString) {
 					throw new Error('Can not find path or axios');
 				}
-				const path = self.toPathString(options.params);
+				const path = self.toPathString(options && options.params);
 
 				let error: any = null;
 				let response: any = null;
@@ -286,7 +255,7 @@ export default class SagaResource<S, R = {}, E = {}> {
 						method: 'post',
 						baseURL: self.baseURL,
 						url: path,
-						params: options.query,
+						params: options && options.query,
 						data: payload,
 					});
 				} catch (e) {
@@ -294,7 +263,8 @@ export default class SagaResource<S, R = {}, E = {}> {
 					yield self.handleError(e);
 				} finally {
 					yield put(self.actions.endLoading());
-					options.done && options.done(error, response.data);
+					if (options && options.done)
+						options.done(error, response.data);
 				}
 			},
 
@@ -303,13 +273,13 @@ export default class SagaResource<S, R = {}, E = {}> {
 			 *  */
 			updateRequest: function*(
 				payload: any,
-				options: RemoteActionOptions
+				options?: RemoteActionOptions
 			): Iterable<any> {
 				yield self.actions.clearError();
 				if (!self.path || !self.axios || !self.toPathString) {
 					throw new Error('Can not find path or axios');
 				}
-				const path = self.toPathString(options.params);
+				const path = self.toPathString(options && options.params);
 
 				let error: any = null;
 				let response: any = null;
@@ -318,26 +288,27 @@ export default class SagaResource<S, R = {}, E = {}> {
 						method: 'patch',
 						baseURL: self.baseURL,
 						url: path,
-						params: options.query,
+						params: options && options.query,
 						data: payload,
 					});
 				} catch (e) {
 					error = e;
 					yield self.handleError(e);
 				} finally {
-					options.done && options.done(error, response.data);
+					if (options && options.done)
+						options.done(error, response.data);
 				}
 			},
 
 			fetchRequest: function*(
 				_: any,
-				options: RemoteActionOptions
+				options?: RemoteActionOptions
 			): Iterable<any> {
 				yield self.actions.clearError();
 				if (!self.path || !self.axios || !self.toPathString) {
 					throw new Error('Can not find path or axios');
 				}
-				const path = self.toPathString(options.params);
+				const path = self.toPathString(options && options.params);
 
 				let error: any = null;
 				let response: any = null;
@@ -347,7 +318,7 @@ export default class SagaResource<S, R = {}, E = {}> {
 						baseURL: self.baseURL,
 						method: 'get',
 						url: path,
-						params: options.query,
+						params: options && options.query,
 					});
 					yield put(self.actions.set(response.data));
 				} catch (e) {
@@ -355,7 +326,8 @@ export default class SagaResource<S, R = {}, E = {}> {
 					yield self.handleError(e);
 				} finally {
 					yield put(self.actions.endLoading());
-					options.done && options.done(error, response.data);
+					if (options && options.done)
+						options.done(error, response.data);
 				}
 			},
 
@@ -364,13 +336,13 @@ export default class SagaResource<S, R = {}, E = {}> {
 			 *  */
 			deleteRequest: function*(
 				payload: any,
-				options: RemoteActionOptions
+				options?: RemoteActionOptions
 			): Iterable<any> {
 				yield self.actions.clearError();
 				if (!self.path || !self.axios || !self.toPathString) {
 					throw new Error('Can not find path or axios');
 				}
-				const path = self.toPathString(options.params);
+				const path = self.toPathString(options && options.params);
 
 				let error: any = null;
 				let response: any = null;
@@ -380,7 +352,7 @@ export default class SagaResource<S, R = {}, E = {}> {
 						method: 'delete',
 						baseURL: self.baseURL,
 						url: path,
-						params: options.query,
+						params: options && options.query,
 						data: payload,
 					});
 				} catch (e) {
@@ -388,11 +360,12 @@ export default class SagaResource<S, R = {}, E = {}> {
 					yield self.handleError(e);
 				} finally {
 					yield put(self.actions.endLoading());
-					options.done && options.done(error, response.data);
+					if (options && options.done)
+						options.done(error, response.data);
 				}
 			},
 			...self.resourceDef.effects,
-		};
+		} as any;
 	}
 
 	private getSaga(): any {
@@ -401,7 +374,7 @@ export default class SagaResource<S, R = {}, E = {}> {
 			const keys = Object.keys(self.effects);
 			for (const key of keys) {
 				yield takeEvery(
-					self.basicActionTypes[key] || key,
+					self.basicActionTypes[key] || self.actionTypeGenerator(key),
 					wrapEffect((self.effects as any)[key])
 				);
 			}

@@ -8,7 +8,7 @@ type ReducersMapObject<S = any, A extends Action = Action> = {
 	[K in keyof S]: Reducer<ResourceState<S[K]>, A>
 };
 
-type ResourceMapObject<S> = {[K in keyof S]: SagaResource<S[K]>};
+type ResourceMapObject<S> = {[K in keyof S]: SagaResource<S[K], any, any>};
 
 interface CombinedReducersAndSagas<S> {
 	getReducer: <K>(rootReducer?: Reducer<K>) => Reducer<K & S>;
