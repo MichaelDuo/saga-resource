@@ -233,142 +233,63 @@ export default class SagaResource<
 	private getEffects(): BasicEffects & CustomEffects<E> {
 		// should not accept an action, should accept payload, get saga should wrap those effects
 		const self = this;
+		const methodMap: {[key: string]: string} = {
+			createRequest: 'post',
+			updateRequest: 'patch',
+			fetchRequest: 'get',
+			deleteRequest: 'delete',
+		};
 		return {
-			/**
-			 * Create will not set resource, you should process it from callback or refetch again
-			 *  */
-			createRequest: function*(
-				payload: any,
-				options?: RemoteActionOptions
-			): Iterable<any> {
-				yield self.actions.clearError();
-				if (!self.path || !self.axios || !self.toPathString) {
-					throw new Error('Can not find path or axios');
-				}
-				const path = self.toPathString(options && options.params);
-
-				let error: any = null;
-				let response: any = null;
-				try {
-					yield put(self.actions.startLoading());
-					response = yield self.axios({
-						method: 'post',
-						baseURL: self.baseURL,
-						url: path,
-						params: options && options.query,
-						data: payload,
-					});
-				} catch (e) {
-					error = e;
-					yield self.handleError(e);
-				} finally {
-					yield put(self.actions.endLoading());
-					if (options && options.done)
-						options.done(error, response.data);
-				}
-			},
-
-			/**
-			 * Update will not set resource, you should process it from callback or refetch again
-			 *  */
-			updateRequest: function*(
-				payload: any,
-				options?: RemoteActionOptions
-			): Iterable<any> {
-				yield self.actions.clearError();
-				if (!self.path || !self.axios || !self.toPathString) {
-					throw new Error('Can not find path or axios');
-				}
-				const path = self.toPathString(options && options.params);
-
-				let error: any = null;
-				let response: any = null;
-				try {
-					response = yield self.axios({
-						method: 'patch',
-						baseURL: self.baseURL,
-						url: path,
-						params: options && options.query,
-						data: payload,
-					});
-				} catch (e) {
-					error = e;
-					yield self.handleError(e);
-				} finally {
-					if (options && options.done)
-						options.done(error, response.data);
-				}
-			},
-
-			fetchRequest: function*(
-				_: any,
-				options?: RemoteActionOptions
-			): Iterable<any> {
-				yield self.actions.clearError();
-				if (!self.path || !self.axios || !self.toPathString) {
-					throw new Error('Can not find path or axios');
-				}
-				const path = self.toPathString(options && options.params);
-
-				let error: any = null;
-				let response: any = null;
-				try {
-					yield put(self.actions.startLoading());
-					response = yield self.axios({
-						baseURL: self.baseURL,
-						method: 'get',
-						url: path,
-						params: options && options.query,
-					});
-					yield put(self.actions.set(response.data));
-				} catch (e) {
-					error = e;
-					yield self.handleError(e);
-				} finally {
-					yield put(self.actions.endLoading());
-					if (options && options.done)
-						options.done(error, response.data);
-				}
-			},
-
-			/**
-			 * Delete will not set resource, you should process it from callback or refetch again
-			 *  */
-			deleteRequest: function*(
-				payload: any,
-				options?: RemoteActionOptions
-			): Iterable<any> {
-				yield self.actions.clearError();
-				if (!self.path || !self.axios || !self.toPathString) {
-					throw new Error('Can not find path or axios');
-				}
-				const path = self.toPathString(options && options.params);
-
-				let error: any = null;
-				let response: any = null;
-				try {
-					yield put(self.actions.startLoading());
-					response = yield self.axios({
-						method: 'delete',
-						baseURL: self.baseURL,
-						url: path,
-						params: options && options.query,
-						data: payload,
-					});
-				} catch (e) {
-					error = e;
-					yield self.handleError(e);
-				} finally {
-					yield put(self.actions.endLoading());
-					if (options && options.done)
-						options.done(error, response.data);
-				}
-			},
+			..._.transform(
+				[
+					'createRequest',
+					'updateRequest',
+					'fetchRequest',
+					'deleteRequest',
+				],
+				(result, key): any => {
+					result[key] = function*(
+						payload?: any,
+						options?: RemoteActionOptions
+					): Iterable<any> {
+						yield self.actions.clearError();
+						if (!self.path || !self.axios || !self.toPathString) {
+							throw new Error('Can not find path or axios');
+						}
+						const path = self.toPathString(
+							options && options.params
+						);
+						let error: any = null;
+						let response: any = null;
+						try {
+							yield put(self.actions.startLoading());
+							response = yield self.axios({
+								method: methodMap[key] as any,
+								baseURL: self.baseURL,
+								url: path,
+								params: options && options.query,
+								data: payload,
+							});
+							if (key === 'fetchRequest')
+								yield put(self.actions.set(response.data));
+						} catch (e) {
+							error = e;
+							yield self.handleError(e);
+						} finally {
+							yield put(self.actions.endLoading());
+							if (options && options.done)
+								options.done(error, response.data);
+						}
+					};
+				},
+				{} as any
+			),
 			...self.resourceDef.effects,
 		} as any;
 	}
 
 	private getSaga(): any {
+		// TODO: fetch request should only take leading actions
 		const self = this;
 		return function*(): Iterable<Effect> {
 			const keys = Object.keys(self.effects);
