@@ -231,7 +231,6 @@ export default class SagaResource<
 	}
 
 	private getEffects(): BasicEffects & CustomEffects<E> {
-		// should not accept an action, should accept payload, get saga should wrap those effects
 		const self = this;
 		const methodMap: {[key: string]: string} = {
 			createRequest: 'post',
@@ -239,7 +238,7 @@ export default class SagaResource<
 			fetchRequest: 'get',
 			deleteRequest: 'delete',
 		};
-		return {
+		const rawEffects = {
 			..._.transform(
 				[
 					'createRequest',
@@ -252,40 +251,57 @@ export default class SagaResource<
 						payload?: any,
 						options?: RemoteActionOptions
 					): Iterable<any> {
-						yield self.actions.clearError();
 						if (!self.path || !self.axios || !self.toPathString) {
 							throw new Error('Can not find path or axios');
 						}
 						const path = self.toPathString(
 							options && options.params
 						);
-						let error: any = null;
-						let response: any = null;
-						try {
-							yield put(self.actions.startLoading());
-							response = yield self.axios({
-								method: methodMap[key] as any,
-								baseURL: self.baseURL,
-								url: path,
-								params: options && options.query,
-								data: payload,
-							});
-							if (key === 'fetchRequest')
-								yield put(self.actions.set(response.data));
-						} catch (e) {
-							error = e;
-							yield self.handleError(e);
-						} finally {
-							yield put(self.actions.endLoading());
-							if (options && options.done)
-								options.done(error, response.data);
-						}
+						const response = yield self.axios({
+							method: methodMap[key] as any,
+							baseURL: self.baseURL,
+							url: path,
+							params: options && options.query,
+							data: payload,
+						});
+						if (key === 'fetchRequest')
+							yield put(self.actions.set(response.data));
+						return response.data;
 					};
 				},
 				{} as any
 			),
 			...self.resourceDef.effects,
-		} as any;
+		};
+		const wrapEffects = (effects: any): any => {
+			return _.transform(
+				effects,
+				(result, value: any, key: string): any => {
+					result[key] = function*(
+						payload: any,
+						options: any,
+						...args: any[]
+					): any {
+						let error: any = null;
+						let result: any = null;
+						yield self.actions.clearError();
+						yield put(self.actions.startLoading());
+						try {
+							result = yield value(payload, options, ...args);
+						} catch (err) {
+							error = err;
+							yield self.handleError(err);
+						} finally {
+							yield put(self.actions.endLoading());
+							if (options && options.done)
+								options.done(error, result);
+						}
+					};
+				},
+				{} as any
+			);
+		};
+		return wrapEffects(rawEffects);
 	}
 
 	private getSaga(): any {
