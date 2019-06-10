@@ -34,6 +34,10 @@ export default class SagaResource<
 	R extends DefaultReducers<S, R>,
 	E extends DefaultEffects<E>
 > {
+	public static ActionTypes = {
+		ERROR: 'resource__ERROR',
+	};
+
 	public name: string;
 
 	public actions: BasicActions &
@@ -328,5 +332,9 @@ export default class SagaResource<
 			data: _.get(axiosError, 'response.data', {}),
 		};
 		yield put(this.actions.setError(error));
+		yield put({
+			type: SagaResource.ActionTypes.ERROR,
+			payload: {error: axiosError},
+		});
 	}
 }
