@@ -286,16 +286,16 @@ export default class SagaResource<
 						let error: any = null;
 						let result: any = null;
 						yield self.actions.clearError();
-						yield options.handleLoading &&
-							put(self.actions.startLoading());
+						if (options && options.handleLoading)
+							yield put(self.actions.startLoading());
 						try {
 							result = yield value(payload, options, ...args);
 						} catch (err) {
 							error = err;
 							yield self.handleError(err);
 						} finally {
-							yield options.handleLoading &&
-								put(self.actions.endLoading());
+							if (options && options.handleLoading)
+								yield put(self.actions.endLoading());
 							if (options && options.done)
 								options.done(error, result);
 						}
