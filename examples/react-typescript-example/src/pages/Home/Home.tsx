@@ -1,26 +1,37 @@
-import React from 'react';
+import React, {useEffect} from 'react';
+import {UserState} from '../../store/user';
 
 export interface StateProps {
-    count: number
+	count: number;
+	user: UserState;
+	items: {id: string; name: string}[];
 }
 
 export interface DispatchProps {
-    asyncIncrement: (num: number) => void
+	asyncIncrement: (num: number) => void;
+	loadUser: () => void;
+	bootstrap: () => void;
 }
 
-type Props = StateProps & DispatchProps
+type Props = StateProps & DispatchProps;
 
-const Home: React.FC<Props>  = (props) => {
-    return (
-        <div>
-            <div>
-                Current Count: {props.count}
-            </div>
-            <button onClick={() => props.asyncIncrement(1)}>
-                Async increment
-            </button>
-        </div>
-    )
-}
+const Home: React.FC<Props> = props => {
+	useEffect(() => {
+		props.loadUser();
+		props.bootstrap();
+	}, []);
+	return (
+		<div>
+			<div>Current Count: {props.count}</div>
+			<button onClick={() => props.asyncIncrement(1)}>
+				Async increment
+			</button>
+			<div>Username: {props.user.username}</div>
+			{props.items.map(item => (
+				<div key={item.id}>{item.name}</div>
+			))}
+		</div>
+	);
+};
 
-export default Home
+export default Home;

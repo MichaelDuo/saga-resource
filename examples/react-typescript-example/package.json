@@ -20,7 +20,8 @@
 		"start": "react-scripts start",
 		"build": "react-scripts build",
 		"test": "react-scripts test",
-		"eject": "react-scripts eject"
+		"eject": "react-scripts eject",
+		"devServer": "json-server --watch db.json --port 8080"
 	},
 	"eslintConfig": {
 		"extends": "react-app"
@@ -39,6 +40,7 @@
 	},
 	"devDependencies": {
 		"@types/react-redux": "^7.0.9",
+		"json-server": "^0.15.0",
 		"redux-devtools-extension": "^2.13.8"
 	}
 }

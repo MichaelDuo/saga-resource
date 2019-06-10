@@ -1,271 +1,185 @@
 import {Reducer, AnyAction} from 'redux';
-import {AxiosInstance, AxiosError} from 'axios';
-import _ from 'lodash';
+import axios, {AxiosInstance, AxiosError} from 'axios';
+import _ from 'lodash'; // import single function
 import pathToRexexp from 'path-to-regexp';
-import {takeEvery, put, takeLeading, Effect} from 'redux-saga/effects';
+import {takeEvery, put, Effect} from 'redux-saga/effects';
+import {
+	separateBaseURLAndPath,
+	wrapEffect,
+	makeActionTypeGenerator,
+} from './utils';
 
-export interface ResourceError {
-	status: number;
-	data: any;
-}
-export interface ResourceMeta {
-	loading: boolean;
-	updating: {[key: string]: boolean};
-	error: ResourceError | null;
-}
+import {
+	ResourceError,
+	ResourceMeta,
+	ResourceState,
+	RemoteActionOptions,
+	ResourceAction,
+	ResourceDefinition,
+	BasicActions,
+	BasicEffects,
+	CustomEffects,
+	ExtendedActions,
+	BasicActionTypes,
+	BasicRemoteActions,
+	CustomReducerActions,
+	CustomEffectActions,
+	DefaultReducers,
+	DefaultEffects,
+	EffectOptions,
+} from './types';
 
-export type ResourceState<T> = {
-	meta: ResourceMeta;
-} & T;
-
-export interface RemoteActionOptions {
-	query?: any;
-	params?: any;
-	done?: (error?: any, data?: any) => void;
-}
-
-export interface ResourceAction {
-	type: string;
-	payload?: any;
-}
-
-export interface ResourceUpdateAction extends ResourceAction {
-	path: string;
-	payload: any;
-}
-
-export interface ResourceRemoteAction extends ResourceAction {
-	query?: any;
-	params?: any;
-	done?: (error?: any, data?: any) => void;
-}
-
-type Effects<T> = {[K in keyof T]: (action: AnyAction) => any};
-
-export interface ResourceDefinition<
-	T,
-	S = {[effectType: string]: () => Iterable<any>}
+export default class SagaResource<
+	S,
+	R extends DefaultReducers<S, R>,
+	E extends DefaultEffects<E>
 > {
-	name: string;
-	state: T;
-	path?: string;
-	axios?: AxiosInstance;
-	effects?: Effects<S>;
-}
-
-export interface BasicActions {
-	set: (data: any) => ResourceAction;
-	update: (data: any, path: string) => ResourceAction;
-	clear: () => ResourceAction;
-	createRequest: (
-		data: any,
-		options?: RemoteActionOptions
-	) => ResourceRemoteAction;
-	updateRequest: (
-		data: any,
-		options?: RemoteActionOptions
-	) => ResourceRemoteAction;
-	fetchRequest: (options?: RemoteActionOptions) => ResourceRemoteAction;
-	deleteRequest: (
-		data?: any,
-		options?: RemoteActionOptions
-	) => ResourceRemoteAction;
-}
-
-export interface ExtendedActions {
-	startLoading: () => ResourceAction;
-	endLoading: () => ResourceAction;
-	startUpdating: (keys: string[]) => ResourceAction;
-	endUpdating: (keys: string[]) => ResourceAction;
-	setError: (error: ResourceError) => ResourceAction;
-	clearError: () => ResourceAction;
-}
-
-export interface BasicActionTypes {
-	set: string;
-	update: string;
-	clear: string;
-	createRequest: string;
-	updateRequest: string;
-	fetchRequest: string;
-	deleteRequest: string;
-}
-
-export interface ObjectWithType<T> {
-	[key: string]: T;
-}
-
-type CustomActions<T> = {[K in keyof T]: (data?: any) => ResourceAction};
-
-export default class SagaResource<T, S = {}> {
-	private resourceDef: ResourceDefinition<T, S>;
+	public static ActionTypes = {
+		ERROR: 'resource__ERROR',
+	};
 
 	public name: string;
 
-	public basicActionTypes: BasicActionTypes;
+	public actions: BasicActions &
+		BasicRemoteActions &
+		ExtendedActions &
+		CustomReducerActions<R> &
+		CustomEffectActions<E>;
 
-	public actions: BasicActions & ExtendedActions & CustomActions<S>;
+	// expose for testing and direct use in saga
+	public effects: BasicEffects & CustomEffects<E>;
 
-	public reducer: Reducer<ResourceState<T>, AnyAction>;
+	// expose for testing purposes
+	public reducers: any;
 
+	// only intended for combine resources, maybe underscore this?
+	// or even from a getter function?
 	public combinedSaga: any;
+	public reducer: Reducer<ResourceState<S>, AnyAction>; // combined reducer maybe?
 
-	protected axios?: AxiosInstance;
+	// private properties
+	private basicActionTypes: BasicActionTypes;
+	private basicActions: BasicActions;
 
-	protected path?: string;
+	private resourceDef: ResourceDefinition<S, R, E>;
 
-	protected toPathString?: pathToRexexp.PathFunction<object>;
+	private axios: AxiosInstance = axios;
+	private baseURL?: string;
+	private path?: string;
+	private toPathString?: pathToRexexp.PathFunction<object>;
 
-	public constructor(resourceDef: ResourceDefinition<T, S>) {
+	private actionTypeGenerator: (actionName: string) => string;
+
+	public constructor(resourceDef: ResourceDefinition<S, R, E>) {
 		this.name = resourceDef.name;
+		this.actionTypeGenerator = makeActionTypeGenerator(this.name);
+
 		this.resourceDef = resourceDef;
-		this.axios = resourceDef.axios;
-		this.path = resourceDef.path;
-		if (this.path) {
-			this.toPathString = pathToRexexp.compile(this.path);
+		this.axios = resourceDef.axios || this.axios;
+		this.reducers = resourceDef.reducers;
+
+		this.effects = this.getEffects();
+		if (resourceDef.path) {
+			const {path, baseURL} = separateBaseURLAndPath(resourceDef.path);
+			this.baseURL = baseURL;
+			this.path = path;
+			this.toPathString = pathToRexexp.compile(path);
 		}
 
 		this.basicActionTypes = this.getActionTypes();
+		this.basicActions = this.getBasicActions();
 		this.actions = {
-			...this.getBaiscActions(),
+			...this.basicActions,
 			...this.getExtendedActions(),
-			...this.getCustomActions(),
+			...this.getEffectAndReducerActions(),
 		};
 		this.reducer = this.getReducer();
 		this.combinedSaga = this.getSaga();
 	}
 
 	private getActionTypes(): BasicActionTypes {
-		return {
-			set: `SET_${this.resourceDef.name}`,
-			update: `UPDATE_${this.resourceDef.name}`,
-			clear: `CLEAR_${this.resourceDef.name}`,
-			createRequest: `CREATE_REQUEST_${this.resourceDef.name}`,
-			updateRequest: `UPDATE_REQUEST_${this.resourceDef.name}`,
-			fetchRequest: `FETCH_REQUEST_${this.resourceDef.name}`,
-			deleteRequest: `DELETE_REQUEST_${this.resourceDef.name}`,
-		};
+		return _.transform(
+			['set', 'update', 'clear'],
+			(result, type): any => {
+				result[type] = this.actionTypeGenerator(type);
+			},
+			{} as any
+		);
 	}
 
-	private getBaiscActions(): BasicActions {
+	private getBasicActions(): BasicActions {
 		return {
 			set: (data: any): ResourceAction => ({
 				type: this.basicActionTypes.set,
 				payload: data,
 			}),
-			update: (data: any, path: string): ResourceUpdateAction => ({
+			update: (key: string, value: any): ResourceAction => ({
 				type: this.basicActionTypes.update,
-				payload: data,
-				path,
+				payload: value,
+				options: {
+					key,
+				},
 			}),
 			clear: (): ResourceAction => ({
 				type: this.basicActionTypes.clear,
-			}),
-			createRequest: (
-				data: any,
-				options?: RemoteActionOptions
-			): ResourceRemoteAction => ({
-				type: this.basicActionTypes.createRequest,
-				payload: data,
-				...options,
-			}),
-			updateRequest: (
-				data: any,
-				options?: RemoteActionOptions
-			): ResourceRemoteAction => ({
-				type: this.basicActionTypes.updateRequest,
-				payload: data,
-				...options,
-			}),
-			fetchRequest: (
-				options?: RemoteActionOptions
-			): ResourceRemoteAction => ({
-				type: this.basicActionTypes.fetchRequest,
-				...options,
-			}),
-			deleteRequest: (
-				data?: any,
-				options?: RemoteActionOptions
-			): ResourceRemoteAction => ({
-				type: this.basicActionTypes.deleteRequest,
-				payload: data,
-				...options,
 			}),
 		};
 	}
 
 	private getExtendedActions(): ExtendedActions {
 		return {
-			startLoading: (): ResourceUpdateAction => ({
-				type: this.basicActionTypes.update,
-				path: 'meta.loading',
-				payload: true,
-			}),
-			endLoading: (): ResourceUpdateAction => ({
-				type: this.basicActionTypes.update,
-				path: 'meta.loading',
-				payload: false,
-			}),
-			startUpdating: (keys: string[]): ResourceUpdateAction => {
-				const updateKeys: ObjectWithType<boolean> = {};
-				keys.reduce((acc, cur): ObjectWithType<boolean> => {
+			startLoading: (): ResourceAction =>
+				this.basicActions.update('meta.loading', true),
+			endLoading: (): ResourceAction =>
+				this.basicActions.update('meta.loading', false),
+			startUpdating: (keys: string[]): ResourceAction => {
+				const updateKeys: Record<string, boolean> = {};
+				keys.reduce((acc, cur): Record<string, boolean> => {
 					acc[cur] = true;
 					return acc;
 				}, updateKeys);
-
-				return {
-					type: this.basicActionTypes.update,
-					path: `meta.updating`,
-					payload: updateKeys,
-				};
+				return this.basicActions.update('meta.updating', updateKeys);
 			},
-			endUpdating: (keys: string[]): ResourceUpdateAction => {
-				const updateKeys: ObjectWithType<boolean> = {};
-				keys.reduce((acc, cur): ObjectWithType<boolean> => {
+			endUpdating: (keys: string[]): ResourceAction => {
+				const updateKeys: Record<string, boolean> = {};
+				keys.reduce((acc, cur): Record<string, boolean> => {
 					acc[cur] = false;
 					return acc;
 				}, updateKeys);
-
-				return {
-					type: this.basicActionTypes.update,
-					path: `meta.updating`,
-					payload: updateKeys,
-				};
+				return this.basicActions.update('meta.updating', updateKeys);
 			},
-			setError: (error: ResourceError): ResourceUpdateAction => {
-				return {
-					type: this.basicActionTypes.update,
-					path: 'meta.error',
-					payload: error,
-				};
+			setError: (error: ResourceError): ResourceAction => {
+				return this.basicActions.update('meta.error', error);
 			},
-			clearError: (): ResourceUpdateAction => {
-				return {
-					type: this.basicActionTypes.update,
-					path: 'meta.error',
-					payload: null,
-				};
+			clearError: (): ResourceAction => {
+				return this.basicActions.update('meta.error', null);
 			},
 		};
 	}
 
-	private getCustomActions(): CustomActions<S> {
-		const result = {} as any;
-		if (this.resourceDef.effects) {
-			const {effects} = this.resourceDef;
-			Object.keys(effects).forEach(
-				(type): void => {
-					result[type] = (data: any): ResourceAction => ({
-						type,
-						payload: data,
-					});
-				}
-			);
-		}
-		return result;
+	private getEffectAndReducerActions(): BasicRemoteActions &
+		CustomReducerActions<R> &
+		CustomEffectActions<E> {
+		const effects = this.effects || {};
+		const {reducers = {}} = this.resourceDef;
+		const typeArr = _.keys(effects).concat(_.keys(reducers));
+		return typeArr.reduce(
+			(acc, type): any => {
+				acc[type] = (
+					payload: any = {},
+					options: any = {}
+				): ResourceAction => ({
+					type: this.actionTypeGenerator(type),
+					payload,
+					options,
+				});
+				return acc;
+			},
+			{} as any
+		);
 	}
 
-	private getReducer(): Reducer<ResourceState<T>, AnyAction> {
+	private getReducer(): Reducer<ResourceState<S>, AnyAction> {
 		const defaultMeta: ResourceMeta = {
 			loading: false,
 			updating: {},
@@ -274,29 +188,40 @@ export default class SagaResource<T, S = {}> {
 		const initialState = _.assign({}, this.resourceDef.state, {
 			meta: defaultMeta,
 		});
+		let customReducers = this.reducers;
+		customReducers = _.transform(
+			customReducers as {[key: string]: any},
+			(result, value, key): any => {
+				result[this.actionTypeGenerator(key)] = value;
+			},
+			{} as any
+		);
 		return (
-			state: ResourceState<T> = _.cloneDeep(initialState),
+			state: ResourceState<S> = _.cloneDeep(initialState),
 			action: AnyAction
-		): ResourceState<T> => {
+		): ResourceState<S> => {
+			if (customReducers && customReducers[action.type]) {
+				return customReducers[action.type](action.payload, {state});
+			}
 			switch (action.type) {
 				case this.basicActionTypes.set:
 					return {...state, ...action.payload};
 				case this.basicActionTypes.update: {
 					let newState;
-					const target = _.get(state, action.path);
+					const target = _.get(state, action.options.key);
 					if (
 						target &&
 						_.isPlainObject(target) &&
 						_.isPlainObject(action.payload)
 					) {
-						newState = _.set(state, action.path, {
+						newState = _.set(state, action.options.key, {
 							...target,
 							...action.payload,
 						});
 					} else {
 						newState = _.set(
 							state as any,
-							action.path,
+							action.options.key,
 							action.payload
 						);
 					}
@@ -310,130 +235,93 @@ export default class SagaResource<T, S = {}> {
 		};
 	}
 
+	private getEffects(): BasicEffects & CustomEffects<E> {
+		const self = this;
+		const methodMap: {[key: string]: string} = {
+			createRequest: 'post',
+			updateRequest: 'patch',
+			fetchRequest: 'get',
+			deleteRequest: 'delete',
+		};
+		const rawEffects = {
+			..._.transform(
+				[
+					'createRequest',
+					'updateRequest',
+					'fetchRequest',
+					'deleteRequest',
+				],
+				(result, key): any => {
+					result[key] = function*(
+						payload?: any,
+						options?: RemoteActionOptions
+					): Iterable<any> {
+						if (!self.path || !self.axios || !self.toPathString) {
+							throw new Error('Can not find path or axios');
+						}
+						const path = self.toPathString(
+							options && options.params
+						);
+						const response = yield self.axios({
+							method: methodMap[key] as any,
+							baseURL: self.baseURL,
+							url: path,
+							params: options && options.query,
+							data: payload,
+						});
+						if (key === 'fetchRequest')
+							yield put(self.actions.set(response.data));
+						return response.data;
+					};
+				},
+				{} as any
+			),
+			...self.resourceDef.effects,
+		};
+		const wrapEffects = (effects: any): any => {
+			return _.transform(
+				effects,
+				(result, value: any, key: string): any => {
+					result[key] = function*(
+						payload: any,
+						options: EffectOptions,
+						...args: any[]
+					): any {
+						let error: any = null;
+						let result: any = null;
+						yield self.actions.clearError();
+						if (options && options.handleLoading)
+							yield put(self.actions.startLoading());
+						try {
+							result = yield value(payload, options, ...args);
+						} catch (err) {
+							error = err;
+							yield self.handleError(err);
+						} finally {
+							if (options && options.handleLoading)
+								yield put(self.actions.endLoading());
+							if (options && options.done)
+								options.done(error, result);
+						}
+						return result;
+					};
+				},
+				{} as any
+			);
+		};
+		return wrapEffects(rawEffects);
+	}
+
 	private getSaga(): any {
-		const that = this;
-		/**
-		 * Create will not set resource, you should process it from callback or refetch again
-		 *  */
-		function* createRequest(action: ResourceRemoteAction): Iterable<any> {
-			yield that.actions.clearError();
-			if (!that.path || !that.axios || !that.toPathString) {
-				throw new Error('Can not find path or axios');
-			}
-			const path = that.toPathString(action.params);
-
-			let error: any = null;
-			let data: any = null;
-			try {
-				yield put(that.actions.startLoading());
-				data = yield that.axios({
-					method: 'post',
-					url: path,
-					params: action.query,
-					data: action.payload,
-				});
-			} catch (e) {
-				error = e;
-				yield that.handleError(e);
-			} finally {
-				yield put(that.actions.endLoading());
-				action.done && action.done(error, data);
-			}
-		}
-
-		/**
-		 * Update will not set resource, you should process it from callback or refetch again
-		 *  */
-		function* updateRequest(action: ResourceRemoteAction): Iterable<any> {
-			yield that.actions.clearError();
-			if (!that.path || !that.axios || !that.toPathString) {
-				throw new Error('Can not find path or axios');
-			}
-			const path = that.toPathString(action.params);
-
-			let error: any = null;
-			let data: any = null;
-			try {
-				data = yield that.axios({
-					method: 'patch',
-					url: path,
-					params: action.query,
-					data: action.payload,
-				});
-			} catch (e) {
-				error = e;
-				yield that.handleError(e);
-			} finally {
-				action.done && action.done(error, data);
-			}
-		}
-
-		function* fetchRequest(action: ResourceRemoteAction): Iterable<any> {
-			yield that.actions.clearError();
-			if (!that.path || !that.axios || !that.toPathString) {
-				throw new Error('Can not find path or axios');
-			}
-			const path = that.toPathString(action.params);
-
-			let error: any = null;
-			let data: any = null;
-			try {
-				yield put(that.actions.startLoading());
-				data = yield that.axios({
-					method: 'get',
-					url: path,
-					params: action.query,
-				});
-				yield put(that.actions.set(data));
-			} catch (e) {
-				error = e;
-				yield that.handleError(e);
-			} finally {
-				yield put(that.actions.endLoading());
-				action.done && action.done(error, data);
-			}
-		}
-
-		/**
-		 * Delete will not set resource, you should process it from callback or refetch again
-		 *  */
-		function* deleteRequest(action: ResourceRemoteAction): Iterable<any> {
-			yield that.actions.clearError();
-			if (!that.path || !that.axios || !that.toPathString) {
-				throw new Error('Can not find path or axios');
-			}
-			const path = that.toPathString(action.params);
-
-			let error: any = null;
-			let data: any = null;
-			try {
-				yield put(that.actions.startLoading());
-				data = yield that.axios({
-					method: 'delete',
-					url: path,
-					params: action.query,
-					data: action.payload,
-				});
-			} catch (e) {
-				error = e;
-				yield that.handleError(e);
-			} finally {
-				yield put(that.actions.endLoading());
-				action.done && action.done(error, data);
-			}
-		}
-
+		// TODO: fetch request should only take leading actions
+		const self = this;
 		return function*(): Iterable<Effect> {
-			yield takeEvery(that.basicActionTypes.createRequest, createRequest);
-			yield takeEvery(that.basicActionTypes.updateRequest, updateRequest);
-			yield takeLeading(that.basicActionTypes.fetchRequest, fetchRequest);
-			yield takeEvery(that.basicActionTypes.deleteRequest, deleteRequest);
-			if (that.resourceDef.effects) {
-				const {effects} = that.resourceDef;
-				const keys = Object.keys(effects);
-				for (const key of keys) {
-					yield takeEvery(key, (effects as any)[key]);
-				}
+			const keys = Object.keys(self.effects);
+			for (const key of keys) {
+				yield takeEvery(
+					self.basicActionTypes[key] || self.actionTypeGenerator(key),
+					wrapEffect((self.effects as any)[key])
+				);
 			}
 		};
 	}
@@ -444,5 +332,9 @@ export default class SagaResource<T, S = {}> {
 			data: _.get(axiosError, 'response.data', {}),
 		};
 		yield put(this.actions.setError(error));
+		yield put({
+			type: SagaResource.ActionTypes.ERROR,
+			payload: {error: axiosError},
+		});
 	}
 }
