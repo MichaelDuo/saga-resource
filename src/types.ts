@@ -1,15 +1,14 @@
 import {AxiosInstance} from 'axios';
 
 type Parameters<T> = T extends (...args: infer T) => any ? T : never;
-// actions
 export interface ResourceAction {
 	type: string;
 	payload?: any;
-	options?: any;
+	options?: EffectOptions;
 }
 
 export interface ResourceActionCreator {
-	(payload?: any, options?: any): ResourceAction;
+	(payload?: any, options?: EffectOptions): ResourceAction;
 }
 
 export type CustomReducerActions<R> = {
@@ -83,14 +82,20 @@ export interface ResourceDefinition<
 	effects?: Effects<E>;
 }
 
-export interface RemoteActionOptions {
+export interface EffectOptions {
+	handleLoading?: boolean;
+	// handleError?: boolean;
+	done?: (error?: any, data?: any) => void;
+	[key: string]: any;
+}
+
+export interface RemoteActionOptions extends EffectOptions {
 	query?: any;
 	params?: any;
-	done?: (error?: any, data?: any) => void;
 }
 
 export interface BasicRemoteEffect {
-	(payload: any, options?: RemoteActionOptions): Iterable<any>;
+	(payload?: any, options?: RemoteActionOptions): Iterable<any>;
 }
 export interface BasicEffects {
 	createRequest: BasicRemoteEffect;
@@ -100,7 +105,10 @@ export interface BasicEffects {
 }
 
 export type CustomEffects<E> = {
-	[K in keyof E]: (payload?: Parameters<E[K]>[0], options?: any) => any
+	[K in keyof E]: (
+		payload?: Parameters<E[K]>[0],
+		options?: EffectOptions
+	) => any
 };
 
 export interface BasicActionTypes {

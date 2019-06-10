@@ -26,6 +26,7 @@ import {
 	CustomEffectActions,
 	DefaultReducers,
 	DefaultEffects,
+	EffectOptions,
 } from './types';
 
 export default class SagaResource<
@@ -279,23 +280,26 @@ export default class SagaResource<
 				(result, value: any, key: string): any => {
 					result[key] = function*(
 						payload: any,
-						options: any,
+						options: EffectOptions,
 						...args: any[]
 					): any {
 						let error: any = null;
 						let result: any = null;
 						yield self.actions.clearError();
-						yield put(self.actions.startLoading());
+						yield options.handleLoading &&
+							put(self.actions.startLoading());
 						try {
 							result = yield value(payload, options, ...args);
 						} catch (err) {
 							error = err;
 							yield self.handleError(err);
 						} finally {
-							yield put(self.actions.endLoading());
+							yield options.handleLoading &&
+								put(self.actions.endLoading());
 							if (options && options.done)
 								options.done(error, result);
 						}
+						return result;
 					};
 				},
 				{} as any
