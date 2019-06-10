@@ -1,0 +1,16 @@
+{
+	"user": {
+		"username": "username1"
+	},
+	"inventory": [
+		{
+			"id": "username1",
+			"items": [
+				{"id": "1", "name": "username1-item-1"},
+				{"id": "2", "name": "username1-item-2"},
+				{"id": "3", "name": "username1-item-3"}
+			]
+		},
+		{"id": "username2", "items": [{"id": "1", "name": "username2-item-1"}]}
+	]
+}
