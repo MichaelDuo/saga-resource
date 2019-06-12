@@ -12,11 +12,17 @@ export interface ResourceActionCreator {
 }
 
 export type CustomReducerActions<R> = {
-	[K in keyof R]: (payload?: any, options?: any) => ResourceAction
+	[K in keyof R]: (
+		payload: Parameters<R[K]>[0],
+		options?: EffectOptions
+	) => ResourceAction
 };
 
 export type CustomEffectActions<E> = {
-	[K in keyof E]: (...args: Parameters<E[K]>) => ResourceAction
+	[K in keyof E]: (
+		payload: Parameters<E[K]>[0],
+		options?: EffectOptions
+	) => ResourceAction
 };
 
 export interface BasicActions {
