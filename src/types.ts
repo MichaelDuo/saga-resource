@@ -11,23 +11,23 @@ export interface ResourceActionCreator {
 	(payload?: any, options?: EffectOptions): ResourceAction;
 }
 
+export type CustomResourceActionCreator<T> = T extends (...args: infer T) => any
+	? T extends [any]
+		? (payload: T[0], options?: EffectOptions) => ResourceAction
+		: (payload?: any, options?: EffectOptions) => ResourceAction
+	: never;
+
 export type CustomReducerActions<R> = {
-	[K in keyof R]: (
-		payload: Parameters<R[K]>[0],
-		options?: EffectOptions
-	) => ResourceAction
+	[K in keyof R]: CustomResourceActionCreator<R[K]>
 };
 
 export type CustomEffectActions<E> = {
-	[K in keyof E]: (
-		payload: Parameters<E[K]>[0],
-		options?: EffectOptions
-	) => ResourceAction
+	[K in keyof E]: CustomResourceActionCreator<E[K]>
 };
 
 export interface BasicActions {
-	set: (data: any) => ResourceAction;
-	update: (key: string, data: any) => ResourceAction;
+	set: (payload: any) => ResourceAction;
+	update: (key: string, payload: any) => ResourceAction;
 	clear: () => ResourceAction;
 }
 export interface BasicRemoteActions {
