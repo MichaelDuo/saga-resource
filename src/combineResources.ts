@@ -4,9 +4,7 @@ import {mapValues, values} from 'lodash';
 import {all, Effect} from 'redux-saga/effects';
 import {ResourceState} from './types';
 
-type ResourceReducersMapObject<S = any, A extends Action = Action> = {
-	[K in keyof S]: Reducer<ResourceState<S[K]>, A>
-};
+type ResourceStateMap<S> = {[K in keyof S]: ResourceState<S[K]>};
 
 type ResourceMapObject<S> = {[K in keyof S]: SagaResource<S[K], any, any>};
 
@@ -14,7 +12,7 @@ interface CombinedReducersAndSagas<S> {
 	getSaga: (saga: any) => any;
 	combineReducers: <T>(
 		reducers?: ReducersMapObject<T, any>
-	) => Reducer<T & S>;
+	) => Reducer<T & ResourceStateMap<S>>;
 }
 
 export default function combineResources<S>(
