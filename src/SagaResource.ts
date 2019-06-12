@@ -262,13 +262,18 @@ export default class SagaResource<
 						const path = self.toPathString(
 							options && options.params
 						);
-						const response = yield self.axios({
-							method: methodMap[key] as any,
-							baseURL: self.baseURL,
-							url: path,
-							params: options && options.query,
-							data: payload,
-						});
+						const response = yield self.axios(
+							_.pickBy(
+								{
+									method: methodMap[key] as any,
+									baseURL: self.baseURL,
+									url: path,
+									params: options && options.query,
+									data: payload,
+								},
+								_.identity
+							)
+						);
 						if (key === 'fetchRequest')
 							yield put(self.actions.set(response.data));
 						return response.data;
