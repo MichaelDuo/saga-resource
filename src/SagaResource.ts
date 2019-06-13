@@ -294,8 +294,10 @@ export default class SagaResource<
 					): any {
 						let error: any = null;
 						let result: any = null;
+						let shouldHandleLoading =
+							_.get(options, 'handleLoading') !== false;
 						yield self.actions.clearError();
-						if (options && options.handleLoading)
+						if (shouldHandleLoading)
 							yield put(self.actions.startLoading());
 						try {
 							result = yield value(payload, options, ...args);
@@ -303,7 +305,7 @@ export default class SagaResource<
 							error = err;
 							yield self.handleError(err);
 						} finally {
-							if (options && options.handleLoading)
+							if (shouldHandleLoading)
 								yield put(self.actions.endLoading());
 							if (options && options.done)
 								options.done(error, result);
