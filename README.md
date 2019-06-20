@@ -7,7 +7,7 @@ saga-resource
 
 Features:
 ------------
-- Easy to implement on your current redux + redux-saga archetecturee 
+- Easy to implement on your current redux + redux-saga architecture 
 
 ## The initial setup
 
@@ -18,33 +18,33 @@ import {delay, put} from 'redux-saga/effects';
 import {makeResource} from 'saga-resource';
 
 interface CounterState {
-	count: number;
+    count: number;
 }
 
 interface CounterReducers {
-	inc: (num?:number) => CounterState;
+    inc: (num?:number) => CounterState;
 }
 
 interface CounterEffects {
-	asyncInc: (num?:number) => any;
+    asyncInc: (num?:number) => any;
 }
 
 const counter = makeResource<CounterState, CounterReducers, CounterEffects>({
-	name: 'counter',
-	state: {
-		count: 0,
-	},
-	reducers: {
-		inc: (num=1, {state}) => {
-			return {...state, ...{count: state.count + num}};
-		},
-	},
-	effects: {
-		*asyncInc(num=1): any {
-		    yield delay(500);
-			yield put(counter.actions.inc(num));
-		},
-	},
+    name: 'counter',
+    state: {
+        count: 0,
+    },
+    reducers: {
+        inc: (num=1, {state}) => {
+            return {...state, ...{count: state.count + num}};
+        },
+    },
+    effects: {
+        *asyncInc(num=1): any {
+            yield delay(500);
+            yield put(counter.actions.inc(num));
+        },
+    },
 });
 
 export default counter;
@@ -107,12 +107,38 @@ There are 3 built in reducers, `set, update, clear`
 `clear` clear will reset your state to it's initial state. `e.g. dispatch(resource.actions.clear())`
 
 ## Built-in effects
-There are 4 built-in effects, `createRequest, updateRequest, fetchRequest, deleteRequest`, these four effects will send request corresponds to `post, patch, get, delete`, with exception that `fetchRequest` will set your state based on data the request returns.
+There are 4 built-in effects, `createRequest, updateRequest, fetchRequest, deleteRequest`, these four effects will send request corresponds to `post, patch, get, delete`, with an exception that `fetchRequest` will set your state based on data the request returns.
 
-You can call these method only if you have `path` setup in your resource definition.
+You can call these methods only if you have a `path` setup in your resource definition.
 
+For example:
+```typescript
+// ./store/user.ts
+import {makeResource} from 'saga-resource';
 
-### API
+export interface UserState {
+    username: string;
+}
+
+const user = makeResource<UserState, {}, {}>({
+    name: 'user',
+    path: 'http://localhost:8080/user',
+    state: {
+        username: 'Uninitialized user',
+    },
+});
+
+export default user;
+```
+
+Fetch user by `dispatch(user.actions.fetchRequest())`
+Or you can use effect directly in you saga file `yield user.effects.fetchRequest()`
+
+## Loading status
+All effects will have loading status stored in `resourceState.meta.loading`
+
+## Error handling
+When ever resource effects throws an error, { type: `SagaResource.actionTypes.ERROR`, data } will be dispatched.
 
 [npm-image]: https://img.shields.io/npm/v/saga-resource.svg?style=flat
 [npm-url]: https://www.npmjs.com/package/saga-resource
