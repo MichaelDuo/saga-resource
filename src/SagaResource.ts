@@ -8,6 +8,7 @@ import {
 	wrapEffect,
 	makeActionTypeGenerator,
 } from './utils';
+import constants from './constants';
 
 import {
 	ResourceError,
@@ -35,7 +36,7 @@ export default class SagaResource<
 	E extends DefaultEffects<E>
 > {
 	public static ActionTypes = {
-		ERROR: 'resource__ERROR',
+		ERROR: constants.ACTION_TYPE_ERROR,
 	};
 
 	public name: string;
@@ -287,36 +288,36 @@ export default class SagaResource<
 			return _.transform(
 				effects,
 				(result, value: any, key: string): any => {
-					result[key] = function*(
-						payload: any,
-						options: EffectOptions,
-						...args: any[]
-					): any {
-						let error: any = null;
-						let result: any = null;
-						let shouldHandleLoading =
-							_.get(options, 'handleLoading') !== false;
-						yield self.actions.clearError();
-						if (shouldHandleLoading)
-							yield put(self.actions.startLoading());
-						try {
-							result = yield value(payload, options, ...args);
-						} catch (err) {
-							error = err;
-							yield self.handleError(err);
-						} finally {
-							if (shouldHandleLoading)
-								yield put(self.actions.endLoading());
-							if (options && options.done)
-								options.done(error, result);
-						}
-						return result;
-					};
+					result[key] = self.wrapEffect(value);
 				},
 				{} as any
 			);
 		};
 		return wrapEffects(rawEffects);
+	}
+
+	private wrapEffect(effect: any): any {
+		const self = this;
+		return function*(
+			payload: any,
+			options: EffectOptions,
+			...args: any[]
+		): any {
+			let error: any = null;
+			let result: any = null;
+			let shouldHandleLoading = _.get(options, 'handleLoading') !== false;
+			if (shouldHandleLoading) yield put(self.actions.startLoading());
+			try {
+				result = yield effect(payload, options, ...args);
+			} catch (err) {
+				error = err;
+				throw err;
+			} finally {
+				if (shouldHandleLoading) yield put(self.actions.endLoading());
+				if (options && options.done) options.done(error, result);
+			}
+			return result;
+		};
 	}
 
 	private getSaga(): any {
@@ -327,21 +328,40 @@ export default class SagaResource<
 			for (const key of keys) {
 				yield takeEvery(
 					self.basicActionTypes[key] || self.actionTypeGenerator(key),
-					wrapEffect((self.effects as any)[key])
+					self.wrapSaga((self.effects as any)[key])
 				);
 			}
 		};
 	}
 
-	private *handleError(axiosError: AxiosError): Iterable<any> {
-		const error = {
-			status: _.get(axiosError, 'response.status', 0),
-			data: _.get(axiosError, 'response.data', {}),
+	private wrapSaga(effect: any): any {
+		const self = this;
+		return function*(action: AnyAction): Iterable<any> {
+			try {
+				yield effect(action.payload, action.options);
+			} catch (err) {
+				yield self.handleError(err);
+			}
 		};
+	}
+
+	private *handleError(err: any): Iterable<any> {
+		let error;
+		if (_.get(err, 'response.data')) {
+			error = {
+				status: _.get(err, 'response.status', 0),
+				data: _.get(err, 'response.data', {}),
+			};
+		} else {
+			error = {
+				status: 500,
+				data: err.message,
+			};
+		}
 		yield put(this.actions.setError(error));
 		yield put({
 			type: SagaResource.ActionTypes.ERROR,
-			payload: {error: axiosError},
+			payload: {error: err},
 		});
 	}
 }
