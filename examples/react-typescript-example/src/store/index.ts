@@ -9,7 +9,7 @@ import {combineResources} from 'saga-resource';
 
 const combinedResources = combineResources({counter, user, inventory});
 
-const rootReducer = combinedResources.combineReducers({});
+const rootReducer = combinedResources.combineReducers();
 
 export type AppState = ReturnType<typeof rootReducer>;
 
@@ -22,14 +22,10 @@ const bindMiddleware = (...middlewares: any[]): any => {
 	return applyMiddleware(...middlewares);
 };
 
-export default function makeStore(initialState?: AppState): Store {
+export default function makeStore(): Store {
 	const sagaMiddleware = createSagaMiddleware();
 
-	const store = createStore(
-		rootReducer,
-		initialState,
-		bindMiddleware(sagaMiddleware)
-	);
+	const store = createStore(rootReducer, bindMiddleware(sagaMiddleware));
 
 	sagaMiddleware.run(rootSaga);
 

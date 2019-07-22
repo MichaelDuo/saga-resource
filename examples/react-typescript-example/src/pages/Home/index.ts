@@ -10,6 +10,7 @@ const mapStateToProps = (state: AppState): StateProps => {
 		count: state.counter.count,
 		user: state.user,
 		items: state.inventory.items,
+		test: state.user.meta.error,
 	};
 };
 

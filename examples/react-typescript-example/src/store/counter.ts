@@ -5,14 +5,14 @@ interface CounterState {
 	count: number;
 }
 
-interface CounterEffects {
-	addTwo: (payload: {test: string}) => any;
-	addNumberAsync: (payload: number) => any;
+interface CounterReducers {
+	inc: (num: number) => CounterState;
+	addNumber: (payload: number) => CounterState;
 }
 
-interface CounterReducers {
-	inc: (payload: {test: number}) => CounterState;
-	addNumber: (payload: number) => CounterState;
+interface CounterEffects {
+	addTwo: () => any;
+	addNumberAsync: (payload: number) => any;
 }
 
 const counter = makeResource<CounterState, CounterReducers, CounterEffects>({
@@ -21,8 +21,8 @@ const counter = makeResource<CounterState, CounterReducers, CounterEffects>({
 		count: 0,
 	},
 	reducers: {
-		inc: (_, {state}) => {
-			return {...state, ...{count: state.count + 1}};
+		inc: (num = 1, {state}) => {
+			return {...state, ...{count: state.count + num}};
 		},
 		addNumber: (number, {state}) => {
 			return {...state, ...{count: state.count + number}};
@@ -34,6 +34,7 @@ const counter = makeResource<CounterState, CounterReducers, CounterEffects>({
 		},
 		*addNumberAsync(number): any {
 			yield delay(500);
+			throw new Error('123');
 			yield put(counter.actions.addNumber(number));
 		},
 	},

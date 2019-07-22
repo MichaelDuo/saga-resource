@@ -5,6 +5,7 @@ export interface StateProps {
 	count: number;
 	user: UserState;
 	items: {id: string; name: string}[];
+	test: any;
 }
 
 export interface DispatchProps {
