@@ -263,7 +263,7 @@ export default class SagaResource<
 						const path = self.toPathString(
 							options && options.params
 						);
-						const response = yield self.axios(
+						const response: any = yield self.axios(
 							_.pickBy(
 								{
 									method: methodMap[key] as any,
@@ -275,7 +275,7 @@ export default class SagaResource<
 								_.identity
 							)
 						);
-						if (key === 'fetchRequest' && !options.disableAutoSave) {
+						if (key === 'fetchRequest' && (options && !options.disableAutoSave)) {
 							yield put(self.actions.set(response.data));
 						}
 						return response.data;
