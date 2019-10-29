@@ -276,7 +276,9 @@ export default class SagaResource<
 							)
 						);
 						if (key === 'fetchRequest')
-							yield put(self.actions.set(_.get(response, 'data')));
+							yield put(
+								self.actions.set(_.get(response, 'data'))
+							);
 						return _.get(response, 'data');
 					};
 				},
