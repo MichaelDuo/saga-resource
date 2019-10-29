@@ -276,9 +276,9 @@ export default class SagaResource<
 							)
 						);
 						if (key === 'fetchRequest' && (options && !options.disableAutoSave)) {
-							yield put(self.actions.set(response.data));
+							yield put(self.actions.set(_.get(response, 'data')));
 						}
-						return response.data;
+						return _.get(response, 'data');
 					};
 				},
 				{} as any
