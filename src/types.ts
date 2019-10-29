@@ -98,6 +98,7 @@ export interface EffectOptions {
 export interface RemoteActionOptions extends EffectOptions {
 	query?: any;
 	params?: any;
+	disableAutoSave?: boolean;
 }
 
 export interface BasicRemoteEffect {
