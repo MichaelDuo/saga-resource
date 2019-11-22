@@ -1,13 +1,9 @@
 import {Reducer, AnyAction} from 'redux';
-import axios, {AxiosInstance, AxiosError} from 'axios';
+import axios, {AxiosInstance} from 'axios';
 import _ from 'lodash'; // import single function
 import pathToRexexp from 'path-to-regexp';
 import {takeEvery, put, Effect} from 'redux-saga/effects';
-import {
-	separateBaseURLAndPath,
-	wrapEffect,
-	makeActionTypeGenerator,
-} from './utils';
+import {separateBaseURLAndPath, makeActionTypeGenerator} from './utils';
 import constants from './constants';
 
 import {
@@ -275,9 +271,11 @@ export default class SagaResource<
 								_.identity
 							)
 						);
-						if (key === 'fetchRequest' && (!options || !options.disableAutoSave)) {
+						if (
+							key === 'fetchRequest' &&
+							(!options || !options.disableAutoSave)
+						) {
 							yield put(self.actions.set(response.data));
-
 						}
 						return _.get(response, 'data');
 					};
