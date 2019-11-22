@@ -1,6 +1,6 @@
 {
 	"name": "saga-resource",
-	"version": "0.3.81",
+	"version": "0.3.82",
 	"description": "saga-resource",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
