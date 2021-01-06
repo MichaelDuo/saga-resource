@@ -1,7 +1,7 @@
 import {Reducer, AnyAction} from 'redux';
 import axios, {AxiosInstance} from 'axios';
 import _ from 'lodash'; // import single function
-import pathToRexexp from 'path-to-regexp';
+import * as pathToRexexp from 'path-to-regexp';
 import {takeEvery, put, Effect} from 'redux-saga/effects';
 import {separateBaseURLAndPath, makeActionTypeGenerator} from './utils';
 import constants from './constants';
